@@ -1,0 +1,4 @@
+# irlincor parameter file
+input,s,a,"",,,Input  images
+output,s,a,"",,,Output images
+camera,s,a,"",,,Camera

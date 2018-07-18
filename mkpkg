@@ -1,0 +1,14 @@
+# W_REDUCE make file
+
+$call   relink
+$exit
+
+relink:
+        $update libpkg.a
+        $omake  x_w_reduce.x
+        $link   x_w_reduce.o libpkg.a -lxtools
+        ;
+
+libpkg.a:
+        t_ir_linearize.x        <imhdr.h> <error.h>
+        ;

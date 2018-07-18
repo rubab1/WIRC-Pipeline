@@ -1,0 +1,49 @@
+# New version of WIRC scripts. Re-written based on original
+# versions by Pat, Eric, Paul, etc.
+#
+w_reduce: 
+  - Check loaded packages.        *** DONE ***
+  - Create all scripts independently of PANIC.  *** DONE ***
+  - Add quick reduction scripts.
+  - Check the SExtractor files.   *** DONE ***
+
+w_loop_combine:
+  - Got rid of sigma and scale icx images.
+
+w_stk1:
+  - Does not use is2 frames any longer. Just isx frames.
+
+w_pre_list:
+  - Now handles raw frames.
+
+w_fx_asecs:
+  - Now works on raw frames too.
+
+w_sky2: 
+  - For Stds. It's a copy of the original w_sky4a.
+
+w_std: 
+  - No photometry because that is left for snphot.
+  - Clear stacks before writing with wclear.
+
+
+w_store:
+  - Now calculates the standar deviation.
+
+
+w_dflat:
+  - Uses dark substracted frames for masks instead of non dark substracted frames.
+
+New scripts:
+
+  wclear, wsorry, w_get_date, w_dither1
+  Replacing:
+  pclear, psorry, get_date, w_dither1a
+
+Check if to delete: 
+
+  get_cfid  DELETED
+
+Change:
+
+  pfiles$

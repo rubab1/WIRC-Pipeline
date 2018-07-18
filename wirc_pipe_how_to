@@ -1,0 +1,302 @@
+
+===== Prepare the Pipeline to Run =====
+
+
+1. Extract the pipeline files in your IRAF home directory, so that you have something like:
+
+/home/bessel/khan/IRAF/wirc_pipe
+
+
+2. Edit your IRAF login.cl file to add:
+
+set    wirc_pp          = "home$wirc_pipe/"
+task   $w_reduce.pkg = wirc_pp$w_reduce.cl
+set     imtype       = "fits"
+
+
+3. Edit w_reduce.cl to set the correct values for 'wfiles' and 'uparm', such as -
+
+set    uparm  = "home$uparm_wirc/"
+set    wfiles = "/home/bessel/khan/Databin/GC_Data/calibrations/"
+
+
+4. Under the directory that you have specified as the location of "wfiles", create 3 sub-directories  called "darks", "flats", and "bp_masks".
+
+
+
+===== To do before Data Reduction Starts =====
+
+
+5. Organize your data by nights keeping all the data for each night in separate directories. In each directory create the files dflat_pairs, crd_pairs and unc_pairs (and as needed: tflat_pairs, std_pairs, alt_pairs) [also see Note VII] -
+
+a. dflat_pairs is a two column file. On each line, the first number is for the dome flat taken with lamps on and the second one is the dome flat taken (same filter and exposure time) with lamps off. This order (first on and then off) is absolutely essential.
+
+b. unc_pairs, tflat_pairs, alt_pairs etc. are three column files. For each line, the first two elements (lets say p1 and p2) are for the first and last file in a dithered sequence of observation. The third column will be for chip number.
+
+c. crd_pairs is a seven column file for crowded star fields, where the first two columns are similar to those for unc_pairs, and the seventh column is the chip number. The third and fourth as well as fifth and sixth columns represent the first and last file in two dithered sequences, with same filter and exposure time, of observation of a star field ("off-source") close to the crowded star field. These files are used for estimating the sky (for sky subtraction) for the crowded field.
+
+[Comments:
+a. If you have only one off-source observation sequence, use the same sequence twice, so that "p1 p2 p3 p4 p5 p6 chip" actually becomes "p1 p2 p3 p4 p3 p4 chip".
+b. In case you do not have any off-source observation, or the uncrowded star field observations were not close to the crowded field, just re-list the on-source sequences, so that the crd_pairs become "p1 p2 p1 p2 p1 p2 chip". Please see Notes-II.]
+
+
+6. You need flats for every filter that was used for observation. Only one exposure time will suffice (aka. need not have flats for specific exposure times). You will need darks for all exposure times. If darks for a specific exposure time or flats for a specific band is missing, copy necessary files from another night. (Do not edit anything as yet.)
+
+7. To process 1x amount of raw data, you will need 10x disk space for intermediate files and another 1x for processed data. For example, if each night's data amounts to roughly 6GB, make sure that you have at least 60GB free space before starting the reduction process for that night. Step-15 cleans up intermediate files.
+
+8. Back-up all these directories before proceeding any further. Step-11 will modify the irx file headers, and if something doesn't go right, you will need to restore the original irx files.
+
+
+
+===== Data Reduction Steps =====
+
+
+9. From here on, let's assume that all data files for a given night have a number between 00001 and 00500 (aka. file names such as irx_00001_c1_001.fits etc.) and most of the darks and flats are in 00001 to 00040. Also, 00491 to 00500 has some more darks or flats taken after science observation or were brought in from another night.
+
+
+10. Start IRAF within xgterm, and start ds9. To load the WIRC pipeline package, execute -
+
+w_reduce
+
+
+11. Change directory into where any one night's data is stored. Now, check and fix the file headers for possible errors.
+
+a. First, execute -
+
+w_chk_headers 1 500 > headers
+
+b. Now, open the file 'headers'. The columns are "Filename, title, object, obstype, filter, airmass, exptime, night". Edit the file by hand to:
+
+- Cross-check the header information with your observation log to resolve confusions
+
+- Make sure that all files have the same date associated with them. The date may have changed at mid-night, or you may have brought files from another night. Stick to one convention for each night: for example, always adopt the latter date of the night (date after midnight).
+
+- Make sure that the title, object, and obstype for -
+    Dome Flats is "dflat",
+    Darks is "dark" or "Dark", and
+    Twilight flats is "twilight" or "tflat".
+
+- Make sure that the obstype for all the science data is 'astro'.
+
+c. Open the script wirc_pipe/w_fix_headers.cl and comment out ("#") all the lines that would try to fix columns for which you did not edit anything in the previous step, such as airmass or filter etc. Now execute -
+
+w_fix_headers headers
+
+d. Delete the "headers" file, repeat step-a, and check the new headers file to make sure that only the desired changes have been made. If something does not look right, restore the irx files from your back-up and try again.
+
+e. Uncomment the  lines in w_fix_headers (from step-c).
+
+12. To identify the fiducial stars automatically, execute -
+
+w_mfid u aut
+w_mfid c aut
+...
+
+
+13. Execute the steps that apply to all files, first for the darks and flats, and * only then * for the science data -
+
+w_1go 1 40 n
+w_1go 491 500 n
+w_1go 41 490 n
+
+[Comments:
+a. If you get a prompt asking to overwrite dark or flat files, answer negative ("n").]
+b. If you do not get idf frames corresponding to some irx frames, make sure that you have the necessary darks and flats under the "calibrations directory". Missing flats will result in skipping of frames for a specific filter, and missing darks will result in skipping of frames for a specific exposure time. See steps 7 and 11.]
+
+
+14. Check the darks/flats/bp_masks sub-directories under calibrations to make sure that all the necessary files have been made (the naming convention there is self explanatory). Now, go for the uncrowded and crowded fields. For uncrowded fields, the final product are the stk_* files. For crowded fields, they are the stk_is2_* files. The *_tr frames are the central region of the stacks that (ideally) contains the overlapping sections from all dithers. Execute [See Note-I for "invalid floating point" error] -
+
+w_1go 41 490 c
+w_1go 41 490 c
+...
+
+[Comments:
+a. The two numbers don't matter unless you are using the "n" handle. The pipeline will use unc_pairs files for the "u" handle and crd_pairs files for the "c" handle (and so on).
+b. If all your darks and flats have a lower sequence number (let's say 1 through 50) than you science data frames (let's say 51 through 500) for a given night, you may simply execute "w_1go 1 500 nuc" . However, due to the "invalid floating point error issue, going one handle at a time may be the best idea.]
+
+
+15. To clean up all the intermediate files, which happen to take up a humongous amount of disk space, execute -
+
+w_clean_up
+
+
+16. You might want to try out the w_chip_combine script to combine overlapping exposure sequences to produce a multi-chip big-picture frame.
+
+
+
+===== Notes =====
+
+
+I. One quadrant of WIRC's chip-1 is dead. If the fiducial star identified in step 10 happens to fall on the dead quadrant in a subsequent exposure of a dither-sequence, you may get this error in step 14: "ERROR: Invalid floating point operation". This error also occurs for other chips when the pipeline identifies a visual binary system as a single star. 
+
+This is the single biggest problem with the WIRC pipeline/data at this point. The error stems from an imexamine command in w_dither, the dither script used for crowded mode. Since w_dither1, the dither script used for other modes, does not use imexamine, a future version of w_dither may be implemented in line with w_dither1.
+
+To minimize time wastage, you can break up the w_1go loops in many small loops, and execute only the parts after the dither step. Also, if your objects of interest lie in a certain chip, you can use "if" loops in w_1go to limit the pipeline to a single chip. Check w_2go.cl (crowded mode) for an example.
+
+Alternately, if you really need chip-1, just remove that troublesome sequence for all chips from your pairs file. To do this, after step-13, manually run the dither determination script to weed out the troublesome sequences. When you get the error, open the file "crdlist" and delete all rows prior to (and including) the sequence for which the pipeline threw up. Keep repeating this until the while loop finishes without that error. Once you finish the loop without any error, go back to step 14. To do this, execute - 
+
+w_load
+struct *list1; int p1, p2, chip
+list1 = "" ; list1 = "crdlist"
+while ( fscan ( list1, p1, p2, chip ) != EOF )   {
+     if ( chip == 1)    {
+    w_sky5   ( "idf", p1, p2, chip )
+    w_dither ( p1, p2, chip ) 
+     } else {}
+}
+
+*** Do not forget to keep removing the troublesome sequences from the main pairs files as well. ***
+
+
+II. Some known issues with the pipeline -
+
+A.  If you get the error "ERROR: cannot open device", then close and reopen ds9. This is very common, specially for successive w_1go executions.
+
+B. Don't use w_fix_headers twice on same data, and don't ignore steps 8 and 11c. If doing w_fix_headers misses or messes up something, restore all irx files from your back-up and try step 11 again.
+
+[Comment:
+For some reason, after using w_chk_headers on some data, w_chk_headers returns an extra column for that data if you have tried fixing the "title". This makes the headers file incompatible with w_fix_headers. Temporarily editing w_fix_headers for this "extra column" can be an alternative to restoring all files from back-up if a second run of w_fix_headers is needed.]
+
+C. For a few frames, the final stacked files become doubly as wide, such as 2048x1024 rather than 1024x1024. For some reason, the same chip is repeated twice side by side. This is not a generic bug but is rather a sequence specific issue, so just remove that sequence from the pairs files. This may throw a error message (and stop the pipeline) as it changes the size of ds9's working area.
+
+D. Please check all stacks by eye before going ahead to do science with them. Despite doing everything right, not all sequence stacks will appear usable for science purposes, mostly due to absence of automatically detectable high quality fiducial stars which messes up the dither handling. If needed, try using the manual mode of w_mfid (aka. "w_mfid c man" etc.) to solve this problem for individual sequences.
+
+E. It is recommended that chip-1 stacks are taken with a grain of salt, since the dead quadrant degrades the stacks significantly.
+
+F. Using *_tr stacks should be preferred for science purposes since they have the best quality section of every stack.
+
+G. If when running w_mfid the pipeline gets stuck with a message like "Log file open": ctrl-C out of it. First, close and restart ds9 and try w_mfid again. (If you get the error for the same sequence again, remove that sequence (for all chips) from your pairs file. )
+
+
+III. Description of "n" mode scripts that apply to all frames:
+
+w_linearize2: Produces linearized izx frames from irx data frames.
+
+w_defaults: Specifies where to get default darks, flats, masks etc. if they are not in the calibrations directory.
+
+w_loop_combine: Combines izx frames from the same loop to produce loop combined icx frames. Uses w_loopavg.
+
+w_dark: Searches through icx frames for darks, and creates dk frames.
+
+w_subdk: Subtracts appropriate dk frames from non-dark icx frames (including flats) to produce dark subtracted icd frames.
+
+w_dflat: Produces dome-flat files for each filter, chip and night.
+
+w_mask_comb: Combines bad-pixel masks for all flats into a single bp_mask for each chip and night.
+
+w_tflat: Produces twilight-flat files for each chip and night.
+
+w_flatten: Flattens icd frames to produces idf frames. All scripts used for uncrowded or crowded (and so on) mode assumes that linearized, dark-subtracted, loop-combined, and flattened idf frames exist.
+
+
+IV. Description of uncrowded mode scripts:
+
+w_sky1: From idf frames, produces isx frames with median sky value of zero.
+
+w_dither1: Using fiducial star locations identified by w_mfid, determines individual exposure dither information and saves that information in idf and isx/is2/is3 frame headers.
+
+w_stk1: Produces stacks of isx frames.
+
+w_mask2: Produces masks from stacks produced by w_stk1.
+
+w_sksub: Uses the masks produced by w_mask2 on idf frames to estimate sky, and then subtracts sky from idf frames to produce is2 frames.
+
+w_stk3: Produces stacks of is2 frames.
+
+
+V. Description of crowded mode scripts:
+
+mkcrdlist: Makes a non-repeating list of off-source sky frames.
+
+w_sky5: For off-source idf frames, produces isx frames with median sky value of zero.
+
+w_dither: Using fiducial star locations identified by w_mfid, determines individual exposure dither information and saves that information in idf and isx/is2/is3 frame headers.
+
+w_stk4: Produces stacks of isx or is2 (or any other prefix) frames.
+
+w_objmask: Produces masks from isx stacks produced by w_stk4.
+
+w_skysub: Uses the masks produced by w_objmask on idf frames to estimate off-source sky, produces off-source sky stacks, and then subtracts sky from off-source idf frames to produce off-source is2 frames.
+
+w_rmskstk: Deletes isx stacks.
+
+w_mimdel: Deletes is2 (or any other prefix) frames.
+
+w_sky3: Subtracts off-source sky estimate (produced by w_skysub) from on-source idf frames to produce on-source isx frames. (Next: w_dither, w_stk4, and w_objmask use these isx frames to produce on-source isx frame masks.)
+
+w_sky4: Uses the on-source isx frame masks and off-source sky estimates stacks (produced by w_skysub) to produce on-source is2 frames from idf frames.
+
+
+VI. The WIRC pipeline is a modified version of the RetroCam pipeline, which in turn is a modified version of the PANIC pipeline. For detailed and better description of these pipelines, as well as for original unaltered scripts, the following websites will be useful:
+
+< http://www.ociw.edu/Code/panic >
+
+< http://www.ociw.edu/Code/panic/documentation/PANIC_pipeline_steps.txt/ >
+
+< http://www.ociw.edu/Code/panic/documentation/csp-data-reduction-recipe/ >
+
+< http://csp1.lco.cl/~cspuser1/OBS/NIR/IRReducing.html >
+
+< http://csp1.lco.cl/~cspuser1/OBS/NIR/pipeline/tree.html >
+
+
+VII. Examples of various pairs files -
+
+dflat_pairs -
+2645    2644
+2646    2647
+2649    2648
+
+unc_pairs -
+2688    2692    1
+2693    2697    1
+2698    2702    1
+2688    2692    2
+2693    2697    2
+2698    2702    2
+2688    2692    3
+2693    2697    3
+2698    2702    3
+2688    2692    4
+2693    2697    4
+2698    2702    4
+
+crd_pairs (conventional)-
+2703    2707    2652    2660    2661    2669    1
+2711    2715    2652    2660    2661    2669    1
+2756    2760    2670    2678    2679    2687    1
+2761    2765    2670    2678    2679    2687    1
+2703    2707    2652    2660    2661    2669    2
+2711    2715    2652    2660    2661    2669    2
+2756    2760    2670    2678    2679    2687    2
+2761    2765    2670    2678    2679    2687    2
+2703    2707    2652    2660    2661    2669    3
+2711    2715    2652    2660    2661    2669    3
+2756    2760    2670    2678    2679    2687    3
+2761    2765    2670    2678    2679    2687    3
+2703    2707    2652    2660    2661    2669    4
+2711    2715    2652    2660    2661    2669    4
+2756    2760    2670    2678    2679    2687    4
+2761    2765    2670    2678    2679    2687    4
+
+crd_pairs (no off-source observation) -
+2703    2707    2703    2707    2703    2707    1
+2711    2715    2711    2715    2711    2715    1
+2756    2760    2756    2760    2756    2760    1
+2761    2765    2761    2765    2761    2765    1
+2703    2707    2703    2707    2703    2707    2
+2711    2715    2711    2715    2711    2715    2
+2756    2760    2756    2760    2756    2760    2
+2761    2765    2761    2765    2761    2765    2
+2703    2707    2703    2707    2703    2707    3
+2711    2715    2711    2715    2711    2715    3
+2756    2760    2756    2760    2756    2760    3
+2761    2765    2761    2765    2761    2765    3
+2703    2707    2703    2707    2703    2707    4
+2711    2715    2711    2715    2711    2715    4
+2756    2760    2756    2760    2756    2760    4
+2761    2765    2761    2765    2761    2765    4
+
+---------------------------
+Rubab Khan
+khan@astronomy.ohio-state.edu
